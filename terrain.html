@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <style>
@@ -16,7 +15,11 @@ overflow-x:hidden;
 </body>
 <script src="https://cdn.babylonjs.com/babylon.js"></script>
 <script src = 'https://cdn.rawgit.com/BabylonJS/Extensions/master/DynamicTerrain/dist/babylon.dynamicTerrain.min.js'></script>
+<script src = 'https://preview.babylonjs.com/materialsLibrary/babylonjs.materials.min.js'></script>
 <script>
+var keys = [];
+window.addEventListener("keydown",()=>{keys[event.key] = true;});
+window.addEventListener("keyup",()=>{keys[event.key] = false;});
 function map(n,or1,or2,r1,r2){return r1+(r2-r1)*((n-or1)/(or2-or1));}
 function minmax(arr){
 	var mins = arr[0][0];
@@ -57,7 +60,7 @@ function gen(arr){
 				var tr = arr[j][k+size];
 				var bl = arr[j+size][k];
 				var br = arr[j+size][k+size];
-				arr[j+size/2][k+size/2]=arr[j+size/2][k+size/2]!==null?arr[j+size/2][k+size/2]:Math.round((tl+tr+bl+br)/4+(Math.random()*h-h/2));
+				arr[j+size/2][k+size/2]=arr[j+size/2][k+size/2]!==null?arr[j+size/2][k+size/2]:((tl+tr+bl+br)/4+(Math.random()*h-h/2));
 			}
 		}
 		for(var j = 0; j<=arr.length-1; j+=size/2){
@@ -70,7 +73,7 @@ function gen(arr){
 					if(arr[j][k]===null){
 						if(k==arr.length-1){arr[j][k]=arr[j][0];}
 						else if(j==arr.length-1){arr[j][k]=arr[0][k];}
-						else{arr[j][k] = Math.round([t,b,l,r].reduce((a,i)=>a+(i!==null?i:0),0)/4+(Math.random()*h-h/2));}
+						else{arr[j][k] = ([t,b,l,r].reduce((a,i)=>a+(i!==null?i:0),0)/4+(Math.random()*h-h/2));}
 					}
 				}
 			}
@@ -80,21 +83,70 @@ function gen(arr){
 	}
 	return arr;
 }
+var height = 50;
+var time = 90;
 const canvas = document.getElementById('renderCanvas');
 const engine = new BABYLON.Engine(canvas, true);
 function createScene(){
 	const scene = new BABYLON.Scene(engine);
 	const camera = new BABYLON.FreeCamera('camera1', new BABYLON.Vector3(0, 0.5, 0), scene);
-	camera.speed = 0.2;
+	camera.speed = 3;
 	camera.attachControl(canvas, true);
 	const light = new BABYLON.HemisphericLight('light1', new BABYLON.Vector3(0, 1, 0), scene);
+	var g = gen(set(10));
+	var mapSubX = g.length;
+	var mapSubY = g.length;
+	var terrainSub = 1000;
+	var mm = minmax(g);
+        var mapData = new Float32Array(mapSubX * mapSubY * 3);
+	var mapColors = [];
+        for (var l = 0; l < mapSubY; l++) {
+            for (var w = 0; w < mapSubX; w++) {
+                var i = (w + l * mapSubX) * 3;
+                mapData[i] = w;
+                mapData[i + 1] = map(g[w][l],mm[0],mm[1],0,height);
+                mapData[i + 2] = l;
+				mapColors.push((127+Math.random()*10-5)/255,(67+Math.random()*10-5)/255,(58+Math.random()*10-5)/255)
+            }
+        }
+var mapParams = new BABYLON.DynamicTerrain("terrain", {
+            mapData: mapData,
+            mapSubX: mapSubX,
+            mapSubY: mapSubY,
+            terrainSub: terrainSub,
+            mapColors: mapColors
+        }, scene);
+        const terrain = new BABYLON.DynamicTerrain('terrain',mapParams,scene);
+const skyboxmaterial = new BABYLON.SkyMaterial('skyMaterial',scene);
+  skyboxmaterial.backFaceCulling=false;
+  var skybox = BABYLON.Mesh.CreateBox('skybox',1000,scene,false,BABYLON.Mesh.BACKSIDE)
+  skybox.material = skyboxmaterial;
+  skyboxmaterial.useSunPosition = true;
+  skyboxmaterial.sunPosition = new BABYLON.Vector3(Math.cos(time*Math.PI/180)*100,Math.sin(time*Math.PI/180)*100,0)
+  skyboxmaterial.luminance=1;
+	skyboxmaterial.turbidity = 0;
 	
+	var box = new BABYLON.MeshBuilder.CreateBox("box",{width:1000,height:height/2,depth:1000},scene);
+    var rp = new BABYLON.ReflectionProbe("ref",2**10,scene);
+    rp.renderList.push(skybox);
+    var pbr = new BABYLON.PBRMaterial('pbr',scene);
+    pbr.reflectionTexture = rp.cubeTexture;
+    box.material = pbr
+//box.material.alpha = 0.5;
 	scene.registerBeforeRender(function(){
+		skybox.position = new BABYLON.Vector3(camera.position.x,0,camera.position.z);
+		box.position = new BABYLON.Vector3(camera.position.x,0,camera.position.z);
+		if(keys['w']){camera.rotation.x-=3*Math.PI/180;}
+		if(keys['s']){camera.rotation.x+=3*Math.PI/180;}
+		if(keys['a']){camera.rotation.y-=3*Math.PI/180;}
+		if(keys['d']){camera.rotation.y+=3*Math.PI/180;}
 	})
 	return scene;
 };
+try{
 const scene = createScene();
 engine.runRenderLoop(() => {scene.render();});
 window.addEventListener('resize', () => {engine.resize();});
+}catch(e){alert(e)}
 </script>
 </html>
